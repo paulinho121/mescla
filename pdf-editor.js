@@ -130,12 +130,34 @@ async function renderEditPreview() {
     editPreview.innerHTML = '';
     if (!state.editPdfDoc) return;
     const numPages = state.editPdfDoc.getPageCount();
+    // Save once and load into pdf.js
     const pdfBytes = await state.editPdfDoc.save();
     const loadingTask = pdfjsLib.getDocument({ data: pdfBytes });
     const pdf = await loadingTask.promise;
+
     for (let i = 0; i < numPages; i++) {
-        const pageDiv = document.createElement('div'); pageDiv.className = 'pdf-page'; pageDiv.innerHTML = `<canvas id="edit-canvas-${i}"></canvas><div class="page-number">Página ${i+1}</div>`; editPreview.appendChild(pageDiv);
-        const page = await pdf.getPage(i+1); const canvas = document.getElementById(`edit-canvas-${i}`); const ctx = canvas.getContext('2d'); const viewport = page.getViewport({ scale: 0.8 }); canvas.width = viewport.width; canvas.height = viewport.height; await page.render({ canvasContext: ctx, viewport }).promise;
+        const pageDiv = document.createElement('div');
+        pageDiv.className = 'pdf-page';
+        pageDiv.innerHTML = `<canvas id="edit-canvas-${i}"></canvas><div class="page-number">Página ${i+1}</div>`;
+        editPreview.appendChild(pageDiv);
+
+        const page = await pdf.getPage(i+1);
+        const canvas = document.getElementById(`edit-canvas-${i}`);
+        const ctx = canvas.getContext('2d');
+
+        // Compute responsive scale based on container width
+        const containerWidth = Math.max(150, pageDiv.clientWidth || editPreview.clientWidth || 300);
+        const origViewport = page.getViewport({ scale: 1 });
+        const scale = Math.min(2.0, Math.max(0.2, containerWidth / origViewport.width));
+        const viewport = page.getViewport({ scale });
+
+        // Set canvas internal pixel size and make it responsive in layout
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
+        canvas.style.width = '100%';
+        canvas.style.height = 'auto';
+
+        await page.render({ canvasContext: ctx, viewport }).promise;
     }
 }
 
@@ -172,14 +194,66 @@ async function renderOrganizePreview() {
     organizePreview.innerHTML = '';
     if (!state.organizePdfDoc) return;
     const numPages = state.organizePdfDoc.getPageCount();
-    const pdfBytes = await state.organizePdfDoc.save(); const loadingTask = pdfjsLib.getDocument({ data: pdfBytes }); const pdf = await loadingTask.promise;
-    for (let i=0;i<numPages;i++) {
-        const pageDiv = document.createElement('div'); pageDiv.className = 'pdf-page' + (state.selectedPages.has(i) ? ' selected' : ''); pageDiv.dataset.pageIndex = i; pageDiv.innerHTML = `<canvas id="organize-canvas-${i}"></canvas><div class="page-number">Página ${i+1}</div>`; organizePreview.appendChild(pageDiv);
-        const page = await pdf.getPage(i+1); const canvas = document.getElementById(`organize-canvas-${i}`); const ctx = canvas.getContext('2d'); const viewport = page.getViewport({ scale: 0.7 }); canvas.width = viewport.width; canvas.height = viewport.height; await page.render({ canvasContext: ctx, viewport }).promise;
-        pageDiv.addEventListener('click', () => { if (state.selectedPages.has(i)) { state.selectedPages.delete(i); pageDiv.classList.remove('selected'); } else { state.selectedPages.add(i); pageDiv.classList.add('selected'); } });
-        canvas.addEventListener('click', (ev) => { const rect = canvas.getBoundingClientRect(); const clientX = ev.clientX - rect.left; const clientY = rect.bottom - ev.clientY; const pdfX = (clientX / canvas.width) * viewport.width; const pdfY = (clientY / canvas.height) * viewport.height; state.lastClickPdfCoords = { x: pdfX, y: pdfY, pageIndex: i }; showAlert(`Coordenadas: X=${Math.round(pdfX)}, Y=${Math.round(pdfY)} na Página ${i+1}`); });
+    const pdfBytes = await state.organizePdfDoc.save();
+    const loadingTask = pdfjsLib.getDocument({ data: pdfBytes });
+    const pdf = await loadingTask.promise;
+
+    for (let i = 0; i < numPages; i++) {
+        const pageDiv = document.createElement('div');
+        pageDiv.className = 'pdf-page' + (state.selectedPages.has(i) ? ' selected' : '');
+        pageDiv.dataset.pageIndex = i;
+        pageDiv.innerHTML = `<canvas id="organize-canvas-${i}"></canvas><div class="page-number">Página ${i+1}</div>`;
+        organizePreview.appendChild(pageDiv);
+
+        const page = await pdf.getPage(i+1);
+        const canvas = document.getElementById(`organize-canvas-${i}`);
+        const ctx = canvas.getContext('2d');
+
+        // Responsive scale
+        const containerWidth = Math.max(150, pageDiv.clientWidth || organizePreview.clientWidth || 300);
+        const origViewport = page.getViewport({ scale: 1 });
+        const scale = Math.min(2.0, Math.max(0.2, containerWidth / origViewport.width));
+        const viewport = page.getViewport({ scale });
+
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
+        canvas.style.width = '100%';
+        canvas.style.height = 'auto';
+
+        await page.render({ canvasContext: ctx, viewport }).promise;
+
+        pageDiv.addEventListener('click', () => {
+            if (state.selectedPages.has(i)) { state.selectedPages.delete(i); pageDiv.classList.remove('selected'); }
+            else { state.selectedPages.add(i); pageDiv.classList.add('selected'); }
+        });
+
+        canvas.addEventListener('click', (ev) => {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = ev.clientX - rect.left;
+            const clientY = rect.bottom - ev.clientY;
+            const pdfX = (clientX / canvas.width) * viewport.width;
+            const pdfY = (clientY / canvas.height) * viewport.height;
+            state.lastClickPdfCoords = { x: pdfX, y: pdfY, pageIndex: i };
+            showAlert(`Coordenadas: X=${Math.round(pdfX)}, Y=${Math.round(pdfY)} na Página ${i+1}`);
+        });
     }
 }
+
+// Re-render previews on resize (debounced)
+function debounce(fn, wait) {
+    let t;
+    return function (...args) {
+        clearTimeout(t);
+        t = setTimeout(() => fn.apply(this, args), wait);
+    };
+}
+
+const handleResize = debounce(() => {
+    if (state.editPdfDoc) renderEditPreview();
+    if (state.organizePdfDoc) renderOrganizePreview();
+}, 250);
+
+window.addEventListener('resize', handleResize);
 
 saveOrganizeBtn.addEventListener('click', async () => { try { if (state.selectedPages.size === 0) { showAlert('Selecione pelo menos uma página para salvar.','error'); return; } showLoading(true); const { PDFDocument } = PDFLib; const newPdf = await PDFDocument.create(); const selectedPagesArray = Array.from(state.selectedPages).sort((a,b)=>a-b); for (const pageIndex of selectedPagesArray) { const [copiedPage] = await newPdf.copyPages(state.organizePdfDoc, [pageIndex]); newPdf.addPage(copiedPage); } const pdfBytes = await newPdf.save(); await downloadPdf(pdfBytes, 'documento_organizado.pdf'); showAlert('PDF organizado salvo com sucesso!'); } catch (err) { console.error(err); showAlert('Erro ao salvar PDF.','error'); } finally { showLoading(false); } });
 

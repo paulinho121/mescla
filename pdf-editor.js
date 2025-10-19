@@ -147,9 +147,11 @@ async function renderEditPreview() {
 
         // Compute responsive scale based on container width
         const containerWidth = Math.max(150, pageDiv.clientWidth || editPreview.clientWidth || 300);
-        const origViewport = page.getViewport({ scale: 1 });
-        const scale = Math.min(2.0, Math.max(0.2, containerWidth / origViewport.width));
-        const viewport = page.getViewport({ scale });
+    const origViewport = page.getViewport({ scale: 1 });
+    // Compute base scale from container and apply user zoom
+    const baseScale = Math.min(2.0, Math.max(0.2, containerWidth / origViewport.width));
+    const appliedScale = baseScale * (state.zoomLevel || 1.0);
+    const viewport = page.getViewport({ scale: appliedScale });
 
         // Set canvas internal pixel size and make it responsive in layout
         canvas.width = Math.floor(viewport.width);
@@ -179,6 +181,10 @@ const organizeTools = document.getElementById('organizeTools');
 const organizeActions = document.getElementById('organizeActions');
 const saveOrganizeBtn = document.getElementById('saveOrganizeBtn');
 const clearOrganizeBtn = document.getElementById('clearOrganizeBtn');
+const selectedCountEl = document.getElementById('selectedCount');
+const zoomInBtn = document.getElementById('zoomInBtn');
+const zoomOutBtn = document.getElementById('zoomOutBtn');
+const zoomLevelEl = document.getElementById('zoomLevel');
 
 // Desativa o botão de salvar enquanto não houver seleção
 if (saveOrganizeBtn) saveOrganizeBtn.disabled = true;
@@ -186,6 +192,7 @@ if (saveOrganizeBtn) saveOrganizeBtn.disabled = true;
 function updateOrganizeActionsState() {
     if (!saveOrganizeBtn) return;
     saveOrganizeBtn.disabled = state.selectedPages.size === 0;
+    if (selectedCountEl) selectedCountEl.textContent = state.selectedPages.size;
 }
 
 organizeUploadArea.addEventListener('dragover', (e) => { e.preventDefault(); organizeUploadArea.classList.add('dragover'); });
@@ -240,6 +247,34 @@ async function renderOrganizePreview() {
             updateOrganizeActionsState();
         });
 
+        // Enable drag and drop reordering
+        pageDiv.draggable = true;
+        pageDiv.addEventListener('dragstart', (ev) => { ev.dataTransfer.setData('text/plain', i); ev.dataTransfer.effectAllowed = 'move'; pageDiv.classList.add('dragging'); });
+        pageDiv.addEventListener('dragend', () => { pageDiv.classList.remove('dragging'); });
+        pageDiv.addEventListener('dragover', (ev) => { ev.preventDefault(); ev.dataTransfer.dropEffect = 'move'; pageDiv.classList.add('drag-over'); });
+        pageDiv.addEventListener('dragleave', () => { pageDiv.classList.remove('drag-over'); });
+        pageDiv.addEventListener('drop', (ev) => {
+            ev.preventDefault();
+            pageDiv.classList.remove('drag-over');
+            const fromIndex = parseInt(ev.dataTransfer.getData('text/plain'), 10);
+            const toIndex = i;
+            if (isNaN(fromIndex)) return;
+            // reorder DOM
+            const fromEl = document.getElementById(`organize-canvas-${fromIndex}`).parentElement;
+            const toEl = pageDiv;
+            if (fromEl && toEl && fromEl !== toEl) {
+                const parent = toEl.parentElement;
+                parent.insertBefore(fromEl, toEl.nextSibling);
+                // Update selectedPages order by reconstructing order from DOM
+                const newOrder = Array.from(parent.children).map(child => parseInt(child.dataset.pageIndex, 10));
+                // rebuild selectedPages using new order (keep only selected indices)
+                const newSelected = new Set();
+                newOrder.forEach(idx => { if (state.selectedPages.has(idx)) newSelected.add(idx); });
+                state.selectedPages = newSelected;
+                updateOrganizeActionsState();
+            }
+        });
+
         canvas.addEventListener('click', (ev) => {
             const rect = canvas.getBoundingClientRect();
             const clientX = ev.clientX - rect.left;
@@ -267,6 +302,22 @@ const handleResize = debounce(() => {
 }, 250);
 
 window.addEventListener('resize', handleResize);
+
+// Zoom controls
+if (zoomInBtn) {
+    zoomInBtn.addEventListener('click', () => {
+        state.zoomLevel = Math.min(3.0, state.zoomLevel + 0.1);
+        if (zoomLevelEl) zoomLevelEl.textContent = `${Math.round(state.zoomLevel * 100)}%`;
+        if (state.editPdfDoc) renderEditPreview();
+    });
+}
+if (zoomOutBtn) {
+    zoomOutBtn.addEventListener('click', () => {
+        state.zoomLevel = Math.max(0.3, state.zoomLevel - 0.1);
+        if (zoomLevelEl) zoomLevelEl.textContent = `${Math.round(state.zoomLevel * 100)}%`;
+        if (state.editPdfDoc) renderEditPreview();
+    });
+}
 
 saveOrganizeBtn.addEventListener('click', async () => { try { if (state.selectedPages.size === 0) { showAlert('Selecione pelo menos uma página para salvar.','error'); return; } showLoading(true); const { PDFDocument } = PDFLib; const newPdf = await PDFDocument.create(); const selectedPagesArray = Array.from(state.selectedPages).sort((a,b)=>a-b); for (const pageIndex of selectedPagesArray) { const [copiedPage] = await newPdf.copyPages(state.organizePdfDoc, [pageIndex]); newPdf.addPage(copiedPage); } const pdfBytes = await newPdf.save(); await downloadPdf(pdfBytes, 'documento_organizado.pdf'); showAlert('PDF organizado salvo com sucesso!'); } catch (err) { console.error(err); showAlert('Erro ao salvar PDF.','error'); } finally { showLoading(false); } });
 

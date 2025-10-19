@@ -1,0 +1,7 @@
+{
+  "name": "mescla",
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/", "destination": "/pdf-editor.html" }
+  ]
+}

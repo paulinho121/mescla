@@ -1,0 +1,10 @@
+{
+  "name": "mescla",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "npx serve . --listen 8000",
+    "deploy": "vercel --prod"
+  },
+  "devDependencies": {}
+}

@@ -43,6 +43,12 @@
             overflow-x: hidden;
         }
 
+        /* Respect device safe areas (notch / home indicator) */
+        body {
+            padding-top: env(safe-area-inset-top, 12px);
+            padding-bottom: env(safe-area-inset-bottom, 12px);
+        }
+
         :root {
             --primary-color: #6366f1;
             --primary-dark: #4f46e5;
@@ -71,6 +77,10 @@
             width: 100%;
             margin: 0 auto;
         }
+
+        /* Make tabs distribute evenly */
+        .tabs { display: flex; }
+        .tabs .tab { flex: 1; text-align: center; padding: 10px 8px; }
 
         header {
             text-align: center;
@@ -499,13 +509,15 @@
             .file-details h4 { font-size: 0.95rem; }
             .upload-area h3 { font-size: 1.05rem; }
             /* header compact */
-            header { padding-bottom: 6px; }
+            header { padding: 8px 0 6px; }
             header h1 { font-size: 1.5rem; }
             header p { font-size: 0.95rem; }
             /* action buttons compact */
             .action-buttons .btn { padding: 8px 10px; font-size: 0.95rem; }
             /* banner center and limit width */
             .ad-banner { max-width: 520px; margin-left: auto; margin-right: auto; }
+            /* ensure banner doesn't hit browser UI */
+            .ad-banner { margin-bottom: 90px; }
         }
 
         /* Additional safety: ensure main layout doesn't force horizontal scroll */
@@ -514,6 +526,13 @@
             .content-area { margin: 0 auto; }
             .pdf-preview { grid-template-columns: 1fr; }
         }
+
+        /* Center upload card and limit width so it looks balanced on phones */
+        .upload-area { max-width: 640px; margin-left: auto; margin-right: auto; }
+        @media (max-width: 480px) { .upload-area { max-width: 420px; } }
+
+        /* Avoid very tall header pushing content off-screen */
+        header { padding-top: 10px; padding-bottom: 6px; }
 
         @media (max-width: 360px) {
             header h1 { font-size: 1.4rem; }

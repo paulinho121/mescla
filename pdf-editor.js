@@ -180,6 +180,14 @@ const organizeActions = document.getElementById('organizeActions');
 const saveOrganizeBtn = document.getElementById('saveOrganizeBtn');
 const clearOrganizeBtn = document.getElementById('clearOrganizeBtn');
 
+// Desativa o botão de salvar enquanto não houver seleção
+if (saveOrganizeBtn) saveOrganizeBtn.disabled = true;
+
+function updateOrganizeActionsState() {
+    if (!saveOrganizeBtn) return;
+    saveOrganizeBtn.disabled = state.selectedPages.size === 0;
+}
+
 organizeUploadArea.addEventListener('dragover', (e) => { e.preventDefault(); organizeUploadArea.classList.add('dragover'); });
 organizeUploadArea.addEventListener('dragleave', () => organizeUploadArea.classList.remove('dragover'));
 organizeUploadArea.addEventListener('drop', (e) => { e.preventDefault(); organizeUploadArea.classList.remove('dragover'); const files = Array.from(e.dataTransfer.files).filter(f => f.type === 'application/pdf'); if (files.length) handleOrganizeFile(files[0]); });
@@ -189,6 +197,10 @@ organizeFileInput.addEventListener('change', (e) => { if (e.target.files.length)
 async function handleOrganizeFile(file) {
     try { showLoading(true); state.organizeFile = file; state.selectedPages.clear(); const arrayBuffer = await file.arrayBuffer(); const { PDFDocument } = PDFLib; state.organizePdfDoc = await PDFDocument.load(arrayBuffer); const numPages = state.organizePdfDoc.getPageCount(); for (let i=0;i<numPages;i++) state.selectedPages.add(i); organizeUploadArea.style.display = 'none'; organizeTools.style.display = 'flex'; organizeActions.style.display = 'flex'; await renderOrganizePreview(); showAlert('PDF carregado! Clique nas páginas para removê-las da seleção.'); } catch (err) { console.error(err); showAlert('Erro ao carregar PDF.','error'); } finally { showLoading(false); }
 }
+
+// Após carregar arquivo, atualizar estado do botão salvar
+// (iniciado com todas as páginas selecionadas por padrão)
+updateOrganizeActionsState();
 
 async function renderOrganizePreview() {
     organizePreview.innerHTML = '';
@@ -225,6 +237,7 @@ async function renderOrganizePreview() {
         pageDiv.addEventListener('click', () => {
             if (state.selectedPages.has(i)) { state.selectedPages.delete(i); pageDiv.classList.remove('selected'); }
             else { state.selectedPages.add(i); pageDiv.classList.add('selected'); }
+            updateOrganizeActionsState();
         });
 
         canvas.addEventListener('click', (ev) => {

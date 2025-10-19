@@ -498,6 +498,27 @@
             .pdf-preview { grid-template-columns: 1fr; }
             .page-number { font-size: 0.8rem; }
         }
+
+        /* Ad banner responsive tweaks */
+        .ad-banner {
+            min-height: 80px;
+            padding: 12px 18px;
+        }
+
+        .ad-banner .ad-banner-text {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        @media (max-width: 480px) {
+            .ad-banner { padding: 10px; min-height: 60px; }
+            .ad-banner .ad-banner-text { font-size: 0.82rem; }
+        }
+
+        @media (max-width: 360px) {
+            .ad-banner { padding: 8px; min-height: 50px; border-radius: 8px; }
+            .ad-banner .ad-banner-text { font-size: 0.78rem; }
+        }
     </style>
 </head>
 <body>
@@ -698,11 +719,11 @@
             </div>
         </div>
 
-        <div class="ad-space" style="margin-top: 20px; min-height: 100px;">
+    <div class="ad-space ad-banner" style="margin-top: 20px;">
             <!-- Google AdSense Code Here (Banner Horizontal) -->
             <div>
                 <p><strong>Espaço para Anúncio Banner</strong></p>
-                <p style="margin-top: 10px; font-size: 0.85rem;">Insira seu código do Google AdSense aqui (formato banner horizontal)</p>
+                <p class="ad-banner-text" style="margin-top: 10px; font-size: 0.85rem;">Insira seu código do Google AdSense aqui (formato banner horizontal)</p>
             </div>
         </div>
     </div>

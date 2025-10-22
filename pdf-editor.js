@@ -226,25 +226,48 @@ async function extractTextFromPdf(pdfBytes) {
     return texts;
 }
 
-async function translateTextBatch(texts, source, target) {
-    const translated = [];
-    for (const t of texts) {
-        if (!t) { translated.push(''); continue; }
-        try {
-            const res = await fetch(TRANSLATE_ENDPOINT, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ q: t, source: source === 'auto' ? 'auto' : source, target: target, format: 'text' })
-            });
-            if (!res.ok) throw new Error('Erro na API de tradução');
-            const j = await res.json();
-            translated.push(j.translatedText || j.result || '');
-        } catch (err) {
-            console.error('translation error', err);
-            translated.push('');
+// Translate texts with concurrency control and progress callback
+async function translateTextBatch(texts, source, target, options = {}) {
+    const concurrency = options.concurrency || 3;
+    const onProgress = options.onProgress || function () {};
+    const results = new Array(texts.length).fill('');
+
+    let index = 0;
+    let completed = 0;
+
+    async function worker() {
+        while (true) {
+            const i = index++;
+            if (i >= texts.length) return;
+            const t = texts[i];
+            if (!t) {
+                results[i] = '';
+                completed++;
+                onProgress(completed, texts.length);
+                continue;
+            }
+            try {
+                const res = await fetch(TRANSLATE_ENDPOINT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ q: t, source: source === 'auto' ? 'auto' : source, target: target, format: 'text' })
+                });
+                if (!res.ok) throw new Error('Erro na API de tradução');
+                const j = await res.json();
+                results[i] = j.translatedText || j.result || '';
+            } catch (err) {
+                console.error('translation error', err);
+                results[i] = '';
+            }
+            completed++;
+            onProgress(completed, texts.length);
         }
     }
-    return translated;
+
+    const workers = [];
+    for (let w = 0; w < concurrency; w++) workers.push(worker());
+    await Promise.all(workers);
+    return results;
 }
 
 async function renderTranslatePreview(translatedTexts) {
@@ -271,7 +294,22 @@ translateBtn.addEventListener('click', async () => {
         const texts = await extractTextFromPdf(pdfBytes);
         const source = document.getElementById('sourceLang').value;
         const target = document.getElementById('targetLang').value;
-        const translated = await translateTextBatch(texts, source, target);
+
+        // Setup progress UI
+        const progressWrap = document.getElementById('translateProgress');
+        const progressText = document.getElementById('translateProgressText');
+        const progressBar = document.getElementById('translateProgressBar');
+        if (progressWrap) { progressWrap.style.display = 'flex'; }
+        if (progressText) { progressText.textContent = `0/${texts.length}`; }
+        if (progressBar) { progressBar.style.width = '0%'; }
+
+        const translated = await translateTextBatch(texts, source, target, {
+            concurrency: 3,
+            onProgress: (done, total) => {
+                if (progressText) progressText.textContent = `${done}/${total}`;
+                if (progressBar) progressBar.style.width = `${Math.round((done / total) * 100)}%`;
+            }
+        });
         state.translatedTexts = translated;
         await renderTranslatePreview(translated);
         downloadTxtBtn.style.display = 'inline-flex';
@@ -282,6 +320,8 @@ translateBtn.addEventListener('click', async () => {
         showAlert('Erro durante a tradução.', 'error');
     } finally {
         showLoading(false);
+        const progressWrap = document.getElementById('translateProgress');
+        if (progressWrap) { setTimeout(() => { progressWrap.style.display = 'none'; }, 700); }
     }
 });
 

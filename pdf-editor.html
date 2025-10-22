@@ -739,8 +739,14 @@
                                 <option value="de">Alemão</option>
                             </select>
                         </div>
-                        <div class="tool-group">
+                        <div class="tool-group" style="align-items:center; gap:12px;">
                             <button class="btn btn-primary" id="translateBtn">Traduzir PDF</button>
+                            <div id="translateProgress" style="display:none; align-items:center; gap:8px;">
+                                <span id="translateProgressText" style="font-weight:600; color:var(--text-secondary);">0/0</span>
+                                <div style="height:8px; background:#e5e7eb; border-radius:4px; overflow:hidden; width:180px;">
+                                    <div id="translateProgressBar" style="height:100%; width:0%; background:var(--primary-color);"></div>
+                                </div>
+                            </div>
                         </div>
                         <div class="tool-group">
                             <button class="btn btn-success" id="downloadTxtBtn" style="display:none">Baixar TXT</button>

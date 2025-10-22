@@ -173,119 +173,178 @@ saveEditBtn.addEventListener('click', async () => { try { showLoading(true); con
 clearEditBtn.addEventListener('click', () => { state.editFile = null; state.editPdfDoc = null; state.textAnnotations = []; editPreview.innerHTML = ''; editUploadArea.style.display = 'block'; editTools.style.display = 'none'; editActions.style.display = 'none'; editFileInput.value = ''; });
 
 // ========= FUNCIONALIDADE DE ORGANIZAÇÃO =========
+// Substitui a aba de organizar por uma funcionalidade de tradução de PDF
 
-const organizeUploadArea = document.getElementById('organizeUploadArea');
-const organizeFileInput = document.getElementById('organizeFileInput');
-const organizePreview = document.getElementById('organizePreview');
-const organizeTools = document.getElementById('organizeTools');
-const organizeActions = document.getElementById('organizeActions');
-const saveOrganizeBtn = document.getElementById('saveOrganizeBtn');
-const clearOrganizeBtn = document.getElementById('clearOrganizeBtn');
-const selectedCountEl = document.getElementById('selectedCount');
-const zoomInBtn = document.getElementById('zoomInBtn');
-const zoomOutBtn = document.getElementById('zoomOutBtn');
-const zoomLevelEl = document.getElementById('zoomLevel');
+const translateUploadArea = document.getElementById('translateUploadArea');
+const translateFileInput = document.getElementById('translateFileInput');
+const translatePreview = document.getElementById('translatePreview');
+const translateTools = document.getElementById('translateTools');
+const translateBtn = document.getElementById('translateBtn');
+const downloadTxtBtn = document.getElementById('downloadTxtBtn');
+const downloadTranslatedPdfBtn = document.getElementById('downloadTranslatedPdfBtn');
+const clearTranslateBtn = document.getElementById('clearTranslateBtn');
 
-// Desativa o botão de salvar enquanto não houver seleção
-if (saveOrganizeBtn) saveOrganizeBtn.disabled = true;
+// Endpoint de tradução (configurável)
+const TRANSLATE_ENDPOINT = 'https://libretranslate.de/translate';
 
-function updateOrganizeActionsState() {
-    if (!saveOrganizeBtn) return;
-    saveOrganizeBtn.disabled = state.selectedPages.size === 0;
-    if (selectedCountEl) selectedCountEl.textContent = state.selectedPages.size;
-}
+translateUploadArea.addEventListener('dragover', (e) => { e.preventDefault(); translateUploadArea.classList.add('dragover'); });
+translateUploadArea.addEventListener('dragleave', () => translateUploadArea.classList.remove('dragover'));
+translateUploadArea.addEventListener('drop', (e) => { e.preventDefault(); translateUploadArea.classList.remove('dragover'); const files = Array.from(e.dataTransfer.files).filter(f => f.type === 'application/pdf'); if (files.length) handleTranslateFile(files[0]); });
+translateUploadArea.addEventListener('click', (e) => { if (e.target.tagName !== 'BUTTON') translateFileInput.click(); });
+translateFileInput.addEventListener('change', (e) => { if (e.target.files.length) handleTranslateFile(e.target.files[0]); });
 
-organizeUploadArea.addEventListener('dragover', (e) => { e.preventDefault(); organizeUploadArea.classList.add('dragover'); });
-organizeUploadArea.addEventListener('dragleave', () => organizeUploadArea.classList.remove('dragover'));
-organizeUploadArea.addEventListener('drop', (e) => { e.preventDefault(); organizeUploadArea.classList.remove('dragover'); const files = Array.from(e.dataTransfer.files).filter(f => f.type === 'application/pdf'); if (files.length) handleOrganizeFile(files[0]); });
-organizeUploadArea.addEventListener('click', (e) => { if (e.target.tagName !== 'BUTTON') organizeFileInput.click(); });
-organizeFileInput.addEventListener('change', (e) => { if (e.target.files.length) handleOrganizeFile(e.target.files[0]); });
-
-async function handleOrganizeFile(file) {
-    try { showLoading(true); state.organizeFile = file; state.selectedPages.clear(); const arrayBuffer = await file.arrayBuffer(); const { PDFDocument } = PDFLib; state.organizePdfDoc = await PDFDocument.load(arrayBuffer); const numPages = state.organizePdfDoc.getPageCount(); for (let i=0;i<numPages;i++) state.selectedPages.add(i); organizeUploadArea.style.display = 'none'; organizeTools.style.display = 'flex'; organizeActions.style.display = 'flex'; await renderOrganizePreview(); showAlert('PDF carregado! Clique nas páginas para removê-las da seleção.'); } catch (err) { console.error(err); showAlert('Erro ao carregar PDF.','error'); } finally { showLoading(false); }
-}
-
-// Após carregar arquivo, atualizar estado do botão salvar
-// (iniciado com todas as páginas selecionadas por padrão)
-updateOrganizeActionsState();
-
-async function renderOrganizePreview() {
-    organizePreview.innerHTML = '';
-    if (!state.organizePdfDoc) return;
-    const numPages = state.organizePdfDoc.getPageCount();
-    const pdfBytes = await state.organizePdfDoc.save();
-    const loadingTask = pdfjsLib.getDocument({ data: pdfBytes });
-    const pdf = await loadingTask.promise;
-
-    for (let i = 0; i < numPages; i++) {
-        const pageDiv = document.createElement('div');
-        pageDiv.className = 'pdf-page' + (state.selectedPages.has(i) ? ' selected' : '');
-        pageDiv.dataset.pageIndex = i;
-        pageDiv.innerHTML = `<canvas id="organize-canvas-${i}"></canvas><div class="page-number">Página ${i+1}</div>`;
-        organizePreview.appendChild(pageDiv);
-
-        const page = await pdf.getPage(i+1);
-        const canvas = document.getElementById(`organize-canvas-${i}`);
-        const ctx = canvas.getContext('2d');
-
-        // Responsive scale
-        const containerWidth = Math.max(150, pageDiv.clientWidth || organizePreview.clientWidth || 300);
-        const origViewport = page.getViewport({ scale: 1 });
-        const scale = Math.min(2.0, Math.max(0.2, containerWidth / origViewport.width));
-        const viewport = page.getViewport({ scale });
-
-        canvas.width = Math.floor(viewport.width);
-        canvas.height = Math.floor(viewport.height);
-        canvas.style.width = '100%';
-        canvas.style.height = 'auto';
-
-        await page.render({ canvasContext: ctx, viewport }).promise;
-
-        pageDiv.addEventListener('click', () => {
-            if (state.selectedPages.has(i)) { state.selectedPages.delete(i); pageDiv.classList.remove('selected'); }
-            else { state.selectedPages.add(i); pageDiv.classList.add('selected'); }
-            updateOrganizeActionsState();
-        });
-
-        // Enable drag and drop reordering
-        pageDiv.draggable = true;
-        pageDiv.addEventListener('dragstart', (ev) => { ev.dataTransfer.setData('text/plain', i); ev.dataTransfer.effectAllowed = 'move'; pageDiv.classList.add('dragging'); });
-        pageDiv.addEventListener('dragend', () => { pageDiv.classList.remove('dragging'); });
-        pageDiv.addEventListener('dragover', (ev) => { ev.preventDefault(); ev.dataTransfer.dropEffect = 'move'; pageDiv.classList.add('drag-over'); });
-        pageDiv.addEventListener('dragleave', () => { pageDiv.classList.remove('drag-over'); });
-        pageDiv.addEventListener('drop', (ev) => {
-            ev.preventDefault();
-            pageDiv.classList.remove('drag-over');
-            const fromIndex = parseInt(ev.dataTransfer.getData('text/plain'), 10);
-            const toIndex = i;
-            if (isNaN(fromIndex)) return;
-            // reorder DOM
-            const fromEl = document.getElementById(`organize-canvas-${fromIndex}`).parentElement;
-            const toEl = pageDiv;
-            if (fromEl && toEl && fromEl !== toEl) {
-                const parent = toEl.parentElement;
-                parent.insertBefore(fromEl, toEl.nextSibling);
-                // Update selectedPages order by reconstructing order from DOM
-                const newOrder = Array.from(parent.children).map(child => parseInt(child.dataset.pageIndex, 10));
-                // rebuild selectedPages using new order (keep only selected indices)
-                const newSelected = new Set();
-                newOrder.forEach(idx => { if (state.selectedPages.has(idx)) newSelected.add(idx); });
-                state.selectedPages = newSelected;
-                updateOrganizeActionsState();
-            }
-        });
-
-        canvas.addEventListener('click', (ev) => {
-            const rect = canvas.getBoundingClientRect();
-            const clientX = ev.clientX - rect.left;
-            const clientY = rect.bottom - ev.clientY;
-            const pdfX = (clientX / canvas.width) * viewport.width;
-            const pdfY = (clientY / canvas.height) * viewport.height;
-            state.lastClickPdfCoords = { x: pdfX, y: pdfY, pageIndex: i };
-            showAlert(`Coordenadas: X=${Math.round(pdfX)}, Y=${Math.round(pdfY)} na Página ${i+1}`);
-        });
+async function handleTranslateFile(file) {
+    try {
+        showLoading(true);
+        state.translateFile = file;
+        const arrayBuffer = await file.arrayBuffer();
+        state.translatePdfDoc = await PDFLib.PDFDocument.load(arrayBuffer);
+        translateUploadArea.style.display = 'none';
+        translateTools.style.display = 'flex';
+        translatePreview.innerHTML = '';
+        showAlert('PDF carregado! Clique em Traduzir para iniciar.');
+    } catch (err) {
+        console.error(err);
+        showAlert('Erro ao carregar PDF para traduzir.', 'error');
+    } finally {
+        showLoading(false);
     }
 }
+
+async function extractTextFromPdf(pdfBytes) {
+    const loadingTask = pdfjsLib.getDocument({ data: pdfBytes });
+    const pdf = await loadingTask.promise;
+    const texts = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const txtContent = await page.getTextContent();
+        const pageText = txtContent.items.map(it => it.str).join(' ');
+        texts.push(pageText.trim());
+    }
+    return texts;
+}
+
+async function translateTextBatch(texts, source, target) {
+    const translated = [];
+    for (const t of texts) {
+        if (!t) { translated.push(''); continue; }
+        try {
+            const res = await fetch(TRANSLATE_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ q: t, source: source === 'auto' ? 'auto' : source, target: target, format: 'text' })
+            });
+            if (!res.ok) throw new Error('Erro na API de tradução');
+            const j = await res.json();
+            translated.push(j.translatedText || j.result || '');
+        } catch (err) {
+            console.error('translation error', err);
+            translated.push('');
+        }
+    }
+    return translated;
+}
+
+async function renderTranslatePreview(translatedTexts) {
+    translatePreview.innerHTML = '';
+    if (!translatedTexts || translatedTexts.length === 0) return;
+    translatedTexts.forEach((txt, idx) => {
+        const pageDiv = document.createElement('div');
+        pageDiv.className = 'pdf-page';
+        pageDiv.innerHTML = `<div style="padding:12px; max-height:260px; overflow:auto;"><strong>Página ${idx+1}</strong><p style='white-space:pre-wrap; margin-top:8px;'>${escapeHtml(txt || '(sem texto)')}</p></div>`;
+        translatePreview.appendChild(pageDiv);
+    });
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+translateBtn.addEventListener('click', async () => {
+    if (!state.translatePdfDoc) { showAlert('Carregue um PDF primeiro.', 'error'); return; }
+    try {
+        showLoading(true);
+        const pdfBytes = await state.translatePdfDoc.save();
+        const texts = await extractTextFromPdf(pdfBytes);
+        const source = document.getElementById('sourceLang').value;
+        const target = document.getElementById('targetLang').value;
+        const translated = await translateTextBatch(texts, source, target);
+        state.translatedTexts = translated;
+        await renderTranslatePreview(translated);
+        downloadTxtBtn.style.display = 'inline-flex';
+        downloadTranslatedPdfBtn.style.display = 'inline-flex';
+        showAlert('Tradução concluída. Revise e baixe o resultado.');
+    } catch (err) {
+        console.error(err);
+        showAlert('Erro durante a tradução.', 'error');
+    } finally {
+        showLoading(false);
+    }
+});
+
+downloadTxtBtn.addEventListener('click', () => {
+    if (!state.translatedTexts) return;
+    const txt = state.translatedTexts.map((t, i) => `--- Página ${i+1} ---\n${t}\n\n`).join('\n');
+    const blob = new Blob([txt], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'traducao.txt'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+});
+
+downloadTranslatedPdfBtn.addEventListener('click', async () => {
+    if (!state.translatedTexts) return;
+    try {
+        showLoading(true);
+        const { PDFDocument, StandardFonts, rgb } = PDFLib;
+        const newPdf = await PDFDocument.create();
+        const font = await newPdf.embedFont(StandardFonts.Helvetica);
+        for (let i = 0; i < state.translatedTexts.length; i++) {
+            let page = newPdf.addPage([595, 842]); // A4 portrait
+            const text = state.translatedTexts[i] || '(sem texto)';
+            const fontSize = 12;
+            const lines = splitTextIntoLines(text, 80);
+            let y = 820;
+            for (const line of lines) {
+                if (y < 40) { // add new page when overflow
+                    y = 820;
+                    page = newPdf.addPage([595, 842]);
+                }
+                page.drawText(line, { x: 40, y: y, size: fontSize, font, color: rgb(0,0,0) });
+                y -= fontSize + 6;
+            }
+        }
+        const bytes = await newPdf.save();
+        await downloadPdf(bytes, 'documento_traduzido.pdf');
+    } catch (err) {
+        console.error(err);
+        showAlert('Erro ao gerar PDF traduzido.', 'error');
+    } finally {
+        showLoading(false);
+    }
+});
+
+function splitTextIntoLines(text, maxChars) {
+    const words = text.split(/\s+/);
+    const lines = [];
+    let cur = '';
+    for (const w of words) {
+        if ((cur + ' ' + w).trim().length > maxChars) { lines.push(cur.trim()); cur = w; } else { cur += ' ' + w; }
+    }
+    if (cur.trim()) lines.push(cur.trim());
+    return lines;
+}
+
+clearTranslateBtn.addEventListener('click', () => {
+    state.translateFile = null;
+    state.translatePdfDoc = null;
+    state.translatedTexts = null;
+    translatePreview.innerHTML = '';
+    translateUploadArea.style.display = 'block';
+    translateTools.style.display = 'none';
+    downloadTxtBtn.style.display = 'none';
+    downloadTranslatedPdfBtn.style.display = 'none';
+    translateFileInput.value = '';
+});
 
 // Re-render previews on resize (debounced)
 function debounce(fn, wait) {

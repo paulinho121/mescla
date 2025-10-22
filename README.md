@@ -50,3 +50,12 @@ npm run deploy
 ```
 
 Se quiser, posso também criar um GitHub Action que faz o deploy automático ao enviar para `main`.
+
+Deploy automático (GitHub Actions)
+
+1. Vá ao seu repositório no GitHub → Settings → Secrets and Variables → Actions.
+2. Adicione um secret chamado `VERCEL_TOKEN` com um token gerado em https://vercel.com/account/tokens.
+3. (Opcional) Se desejar usar integrações avançadas, adicione também `VERCEL_ORG_ID` e `VERCEL_PROJECT_ID`.
+4. Ao fazer push para `main`, o workflow `.github/workflows/vercel-deploy.yml` rodará e fará deploy automático.
+
+Observação: o workflow usa o Vercel CLI e precisa apenas do `VERCEL_TOKEN` na maioria dos casos.

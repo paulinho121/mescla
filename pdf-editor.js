@@ -183,6 +183,7 @@ const translateBtn = document.getElementById('translateBtn');
 const downloadTxtBtn = document.getElementById('downloadTxtBtn');
 const downloadTranslatedPdfBtn = document.getElementById('downloadTranslatedPdfBtn');
 const clearTranslateBtn = document.getElementById('clearTranslateBtn');
+const translateQuickBtn = document.getElementById('translateQuickBtn');
 
 // Endpoint de tradução (configurável)
 const TRANSLATE_ENDPOINT = 'https://libretranslate.de/translate';
@@ -199,8 +200,9 @@ async function handleTranslateFile(file) {
         state.translateFile = file;
         const arrayBuffer = await file.arrayBuffer();
         state.translatePdfDoc = await PDFLib.PDFDocument.load(arrayBuffer);
-        translateUploadArea.style.display = 'none';
-        translateTools.style.display = 'flex';
+    translateUploadArea.style.display = 'none';
+    translateTools.style.display = 'flex';
+    if (translateQuickBtn) { translateQuickBtn.disabled = false; }
         translatePreview.innerHTML = '';
         showAlert('PDF carregado! Clique em Traduzir para iniciar.');
     } catch (err) {
@@ -282,6 +284,23 @@ translateBtn.addEventListener('click', async () => {
         showLoading(false);
     }
 });
+
+// Quick translate button triggers the same flow as translateBtn
+if (translateQuickBtn) {
+    translateQuickBtn.addEventListener('click', async () => {
+        if (!state.translatePdfDoc) { showAlert('Carregue um PDF primeiro.', 'error'); return; }
+        try {
+            translateQuickBtn.disabled = true;
+            translateBtn.disabled = true;
+            await translateBtn.click();
+        } catch (err) {
+            console.error(err);
+        } finally {
+            translateQuickBtn.disabled = false;
+            translateBtn.disabled = false;
+        }
+    });
+}
 
 downloadTxtBtn.addEventListener('click', () => {
     if (!state.translatedTexts) return;

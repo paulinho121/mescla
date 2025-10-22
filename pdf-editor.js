@@ -188,6 +188,50 @@ const translateQuickBtn = document.getElementById('translateQuickBtn');
 // Endpoint de tradução (configurável)
 const TRANSLATE_ENDPOINT = 'https://libretranslate.de/translate';
 
+// Lista fallback de idiomas (código, nome)
+const FALLBACK_LANGUAGES = [
+    { code: 'pt', name: 'Português' },
+    { code: 'en', name: 'Inglês' },
+    { code: 'es', name: 'Espanhol' },
+    { code: 'fr', name: 'Francês' },
+    { code: 'de', name: 'Alemão' }
+];
+
+function populateLanguageSelects(langs) {
+    const src = document.getElementById('sourceLang');
+    const tgt = document.getElementById('targetLang');
+    if (!src || !tgt) return;
+    // keep 'auto' option for source
+    src.innerHTML = '<option value="auto">Detectar automaticamente</option>' + langs.map(l => `<option value="${l.code}">${l.name}</option>`).join('');
+    // target shouldn't have auto
+    tgt.innerHTML = langs.map(l => `<option value="${l.code}">${l.name}</option>`).join('');
+    // set sensible defaults if present
+    if (Array.from(tgt.options).some(o => o.value === 'en')) tgt.value = 'en';
+    else if (Array.from(tgt.options).some(o => o.value === 'pt')) tgt.value = 'pt';
+}
+
+async function loadSupportedLanguages() {
+    try {
+        // derive base url by removing trailing /translate
+        const base = TRANSLATE_ENDPOINT.replace(/\/translate\/?$/, '');
+        const resp = await fetch(base + '/languages');
+        if (!resp.ok) throw new Error('languages endpoint not ok');
+        const data = await resp.json();
+        // Expected array of { code, name }
+        if (Array.isArray(data) && data.length) {
+            populateLanguageSelects(data.map(d => ({ code: d.code || d.language || d.iso, name: d.name || d.language || d.code })));
+            return;
+        }
+    } catch (err) {
+        console.warn('Could not load languages from endpoint, falling back to defaults.', err);
+    }
+    // fallback
+    populateLanguageSelects(FALLBACK_LANGUAGES);
+}
+
+// carregar idiomas ao iniciar
+loadSupportedLanguages();
+
 translateUploadArea.addEventListener('dragover', (e) => { e.preventDefault(); translateUploadArea.classList.add('dragover'); });
 translateUploadArea.addEventListener('dragleave', () => translateUploadArea.classList.remove('dragover'));
 translateUploadArea.addEventListener('drop', (e) => { e.preventDefault(); translateUploadArea.classList.remove('dragover'); const files = Array.from(e.dataTransfer.files).filter(f => f.type === 'application/pdf'); if (files.length) handleTranslateFile(files[0]); });
